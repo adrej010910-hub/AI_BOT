@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/dashboard", "destination": "/dashboard/index.html" },
+    { "source": "/dashboard/", "destination": "/dashboard/index.html" },
+    { "source": "/dashboard/settings", "destination": "/dashboard/settings.html" },
+    { "source": "/dashboard/settings/", "destination": "/dashboard/settings.html" }
+  ]
+}
