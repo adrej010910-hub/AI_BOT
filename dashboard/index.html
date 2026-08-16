@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Web Lead Agent</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0b0d12;color:#f5f7fb}header{padding:28px 5vw;border-bottom:1px solid #222631;display:flex;justify-content:space-between;align-items:center}h1{font-size:24px;margin:0}.badge{padding:8px 12px;border:1px solid #2b3140;border-radius:999px;color:#9da7ba;font-size:13px}.wrap{max-width:1200px;margin:0 auto;padding:32px 5vw}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}.card,.lead{background:#11141b;border:1px solid #242936;border-radius:16px;padding:20px}.stat b{font-size:28px;display:block;margin-top:8px}.muted{color:#8d96a8}.lead{display:grid;grid-template-columns:1fr auto;gap:20px;margin-bottom:14px}.score{font-size:22px;font-weight:700}.actions{display:flex;gap:8px;align-items:center}.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}.approve{background:#f5f7fb;color:#0b0d12}.skip{background:#202530;color:#d5dae5}.draft{background:#242b39;color:#fff}.message{grid-column:1/-1;background:#0b0d12;border-radius:12px;padding:14px;color:#cbd2df;white-space:pre-wrap;line-height:1.5}.empty{text-align:center;padding:60px;color:#8d96a8}.input{width:100%;padding:12px;background:#0b0d12;border:1px solid #2a3040;color:#fff;border-radius:10px;margin-top:10px}.audit{display:flex;gap:10px;margin-bottom:25px}.audit .input{margin:0}.audit button{min-width:120px}
+  </style>
+</head>
+<body>
+<header><h1>AI Web Lead Agent</h1><span class="badge">Human approval required</span></header>
+<main class="wrap">
+  <section class="stats" id="stats"></section>
+  <section class="card audit"><input id="url" class="input" placeholder="https://business-website.com"/><input id="name" class="input" placeholder="Business name"/><button class="btn approve" onclick="audit()">Audit site</button></section>
+  <h2>Leads awaiting review</h2><div id="leads"><div class="empty">Loading leads…</div></div>
+</main>
+<script>
+const API = localStorage.getItem('AI_BOT_API') || 'http://localhost:8000';
+async function load(){const [s,l]=await Promise.all([fetch(API+'/api/dashboard'),fetch(API+'/api/leads')]);renderStats(await s.json());renderLeads(await l.json())}
+function renderStats(s){document.getElementById('stats').innerHTML=[['Total',s.total],['New',s.new],['Review',s.pending_review],['Sent',s.sent]].map(x=>`<div class="card stat"><span class="muted">${x[0]}</span><b>${x[1]}</b></div>`).join('')}
+function renderLeads(ls){const box=document.getElementById('leads');const pending=ls.filter(x=>x.status!=='skipped'&&x.status!=='sent');if(!pending.length){box.innerHTML='<div class="empty">No leads yet. Run an audit above.</div>';return}box.innerHTML=pending.map(l=>`<article class="lead"><div><h3>${esc(l.business_name)}</h3><div class="muted">${esc(l.website)} ${l.email?'· '+esc(l.email):''}</div><p>${esc(l.audit_summary||'No audit summary')}</p></div><div><div class="score">${l.score}/100</div><div class="actions"><button class="btn draft" onclick="draft(${l.id})">Generate message</button><button class="btn skip" onclick="status(${l.id},'skipped')">Skip</button><button class="btn approve" onclick="status(${l.id},'approved')">Approve</button></div></div>${l.message?`<div class="message">${esc(l.message)}</div>`:''}</article>`).join('')}
+async function audit(){const url=document.getElementById('url').value,name=document.getElementById('name').value||'Unknown Business';if(!url)return;await fetch(API+'/api/audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,business_name:name})});document.getElementById('url').value='';document.getElementById('name').value='';load()}
+async function draft(id){await fetch(API+`/api/leads/${id}/draft`,{method:'POST'});load()}
+async function status(id,s){await fetch(API+`/api/leads/${id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s})});load()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}load();
+</script>
+</body></html>
