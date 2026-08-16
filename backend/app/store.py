@@ -7,6 +7,15 @@ _next_id = 1
 
 def create_lead(business_name: str, website: str, email: str | None = None, score: int = 0, audit_summary: str = "") -> Lead:
     global _next_id
+    normalized = website.lower().rstrip("/")
+    for existing in _leads.values():
+        if existing.website.lower().rstrip("/") == normalized:
+            if email and not existing.email:
+                existing.email = email
+            if audit_summary:
+                existing.audit_summary = audit_summary
+            existing.score = score
+            return existing
     lead = Lead(id=_next_id, business_name=business_name, website=website, email=email, score=score, audit_summary=audit_summary)
     _leads[_next_id] = lead
     _next_id += 1
