@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from urllib.parse import quote_plus
 
 @dataclass
 class DiscoveryConfig:
@@ -10,11 +9,17 @@ class DiscoveryConfig:
 
 
 def build_search_queries(config: DiscoveryConfig) -> list[str]:
-    # Search-provider adapters can consume these queries. We intentionally do not
-    # scrape private data or bypass access controls.
-    base = f"{config.niche} {config.location} website"
-    return [base, f"{config.niche} in {config.location} official website"]
+    niche = str(config.niche or "").strip()
+    location = str(config.location or "").strip()
+    if not niche or not location:
+        return []
+    base = f"{niche} {location} website"
+    return [base, f"{niche} in {location} official website"]
 
 
-def normalize_candidate(name: str, website: str) -> dict:
-    return {"business_name": name.strip(), "website": website.strip(), "source": "public_search"}
+def normalize_candidate(name: str | None, website: str | None) -> dict | None:
+    business_name = str(name or "").strip()
+    site = str(website or "").strip()
+    if not business_name or not site:
+        return None
+    return {"business_name": business_name, "website": site, "source": "public_search"}
