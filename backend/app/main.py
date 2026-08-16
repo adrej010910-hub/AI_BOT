@@ -1,7 +1,7 @@
 import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl, EmailStr
+from pydantic import BaseModel, HttpUrl, EmailStr, Field
 from app.services.auditor import audit_url
 from app.services.contact_finder import find_public_email
 from app.services.outreach import draft_message
@@ -10,25 +10,25 @@ from app.services.mailer import send_email
 from app.services.suppression import SUPPRESSION
 from app.store import create_lead, get_lead, list_leads, update_status
 
-app = FastAPI(title="AI Web Lead Agent", version="0.5.1")
+app = FastAPI(title="AI Web Lead Agent", version="0.5.2")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class AuditRequest(BaseModel):
     url: HttpUrl
-    business_name: str = "Unknown Business"
+    business_name: str = Field(default="Unknown Business", min_length=1, max_length=200)
     email: EmailStr | None = None
 class StatusRequest(BaseModel):
     status: str
 class DiscoverRequest(BaseModel):
-    niche: str
-    location: str
-    limit: int = 5
-    max_score: int = 65
+    niche: str = Field(min_length=1, max_length=100)
+    location: str = Field(min_length=1, max_length=120)
+    limit: int = Field(default=5, ge=1, le=8)
+    max_score: int = Field(default=65, ge=0, le=100)
 class SendRequest(BaseModel):
     confirm: bool = False
 
 @app.get("/api/health")
-def health(): return {"status": "ok", "version": "0.5.1"}
+def health(): return {"status": "ok", "version": "0.5.2"}
 
 async def qualify_candidate(name: str, website: str, email: str | None = None):
     audit_result = await audit_url(website)
@@ -41,22 +41,30 @@ async def qualify_candidate(name: str, website: str, email: str | None = None):
 
 @app.post("/api/audit")
 async def audit(request: AuditRequest):
-    lead, result, ai = await qualify_candidate(request.business_name, str(request.url), str(request.email) if request.email else None)
+    lead, result, ai = await qualify_candidate(request.business_name.strip(), str(request.url), str(request.email) if request.email else None)
     return {"lead": lead.__dict__ if lead else None, "audit": result, "ai": ai, "message": None if lead else "Website could not be audited."}
 
 async def qualify_one(candidate: dict, min_score: int):
     try:
-        lead, audit_result, ai = await qualify_candidate(candidate["business_name"], candidate["website"])
+        name = str(candidate.get("business_name") or "").strip()
+        website = str(candidate.get("website") or "").strip()
+        if not name or not website: return None
+        lead, audit_result, ai = await qualify_candidate(name, website)
         if lead and lead.score >= min_score:
             return {"lead": lead.__dict__, "ai": ai, "audit": audit_result, "source": candidate.get("source_url")}
         return None
     except Exception as exc:
-        return {"business_name": candidate.get("business_name"), "website": candidate.get("website"), "error": str(exc)}
+        return {"business_name": str(candidate.get("business_name") or "Candidate"), "website": str(candidate.get("website") or ""), "error": str(exc)}
 
 @app.post("/api/discover")
 async def discover(request: DiscoverRequest):
-    limit = max(1, min(request.limit, 8))
-    candidates = await discover_businesses(request.niche.strip(), request.location.strip(), limit)
+    niche = request.niche.strip()
+    location = request.location.strip()
+    if not niche or not location: raise HTTPException(422, "Niche and location are required")
+    try:
+        candidates = await discover_businesses(niche, location, request.limit)
+    except Exception as exc:
+        raise HTTPException(502, f"AI search failed: {exc}") from exc
     results = await asyncio.gather(*(qualify_one(c, request.max_score) for c in candidates))
     results = [r for r in results if r is not None]
     return {"found": len(candidates), "qualified": len([r for r in results if "lead" in r]), "results": results}
