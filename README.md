@@ -1,28 +1,34 @@
 # AI Web Lead Agent
 
-AI-powered assistant for finding businesses with outdated websites, auditing their web presence, and preparing personalized redesign outreach.
+A focused web-audit and B2B outreach assistant for finding businesses whose public websites have clear improvement opportunities.
 
-## MVP
+## Current flow
 
-- Discover candidate businesses from approved/public sources
-- Analyze public websites for basic UX, mobile, performance, and technical signals
-- Generate an explainable lead score
-- Draft personalized outreach messages in English
-- Store leads and audit results
-- Require human approval before any outreach is sent
+1. Enter a public business website.
+2. Audit basic technical/UX signals.
+3. Create a lead with an explainable score and issues.
+4. Generate a short personalized English outreach draft.
+5. Review it manually.
+6. Approve it.
+7. Send only after explicit confirmation through the dashboard.
 
-## Safety / outreach
+## Vercel
 
-This project is designed for targeted, compliant business outreach rather than bulk spam. It includes deduplication, rate limits, an opt-out/suppression list, and a manual approval step before sending.
+The repository is structured for Vercel with a static dashboard and FastAPI in `api/index.py`. Vercel's Python runtime supports this FastAPI layout and `requirements.txt` dependency installation. The dashboard is available at `/dashboard/`.
 
-## Planned stack
+## Environment
 
-- Python + FastAPI
-- Playwright
-- SQLite/PostgreSQL
-- OpenAI-compatible LLM provider
-- React/Next.js dashboard
+For sending email, configure:
+
+- `RESEND_API_KEY`
+- `OUTREACH_FROM_EMAIL`
+
+For production persistence, configure a hosted PostgreSQL/Supabase/Neon database and wire `DATABASE_URL` into the storage layer before relying on the app for long-lived lead data. The current in-memory store is intentionally suitable for the MVP/demo only.
+
+## Safety
+
+The agent is designed for targeted, respectful B2B outreach rather than bulk spam. It does not send automatically, requires explicit approval, supports suppression, and should respect applicable laws, provider policies, and recipient opt-outs.
 
 ## Status
 
-Initial repository scaffold. The next commits will add the crawler/auditor, scoring engine, lead storage, and dashboard.
+MVP is deployed-oriented. Next production hardening: persistent database, authentication, real business discovery provider, visual/Playwright audit, rate limiting, and delivery/reply tracking.
