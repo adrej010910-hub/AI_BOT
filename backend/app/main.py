@@ -10,7 +10,7 @@ from app.services.mailer import send_email
 from app.services.suppression import SUPPRESSION
 from app.store import create_lead, get_lead, list_leads, update_status
 
-app = FastAPI(title="AI Web Lead Agent", version="0.5.0")
+app = FastAPI(title="AI Web Lead Agent", version="0.5.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class AuditRequest(BaseModel):
@@ -22,13 +22,13 @@ class StatusRequest(BaseModel):
 class DiscoverRequest(BaseModel):
     niche: str
     location: str
-    limit: int = 10
+    limit: int = 5
     max_score: int = 65
 class SendRequest(BaseModel):
     confirm: bool = False
 
 @app.get("/api/health")
-def health(): return {"status": "ok", "version": "0.5.0"}
+def health(): return {"status": "ok", "version": "0.5.1"}
 
 async def qualify_candidate(name: str, website: str, email: str | None = None):
     audit_result = await audit_url(website)
@@ -44,19 +44,21 @@ async def audit(request: AuditRequest):
     lead, result, ai = await qualify_candidate(request.business_name, str(request.url), str(request.email) if request.email else None)
     return {"lead": lead.__dict__ if lead else None, "audit": result, "ai": ai, "message": None if lead else "Website could not be audited."}
 
+async def qualify_one(candidate: dict, min_score: int):
+    try:
+        lead, audit_result, ai = await qualify_candidate(candidate["business_name"], candidate["website"])
+        if lead and lead.score >= min_score:
+            return {"lead": lead.__dict__, "ai": ai, "audit": audit_result, "source": candidate.get("source_url")}
+        return None
+    except Exception as exc:
+        return {"business_name": candidate.get("business_name"), "website": candidate.get("website"), "error": str(exc)}
+
 @app.post("/api/discover")
 async def discover(request: DiscoverRequest):
-    limit = max(1, min(request.limit, 20))
+    limit = max(1, min(request.limit, 8))
     candidates = await discover_businesses(request.niche.strip(), request.location.strip(), limit)
-    results = []
-    for candidate in candidates:
-        try:
-            lead, audit_result, ai = await qualify_candidate(candidate["business_name"], candidate["website"])
-            if lead and lead.score >= request.max_score:
-                results.append({"lead": lead.__dict__, "ai": ai, "audit": audit_result, "source": candidate.get("source_url")})
-        except Exception as exc:
-            results.append({"business_name": candidate.get("business_name"), "website": candidate.get("website"), "error": str(exc)})
-        await asyncio.sleep(0.25)
+    results = await asyncio.gather(*(qualify_one(c, request.max_score) for c in candidates))
+    results = [r for r in results if r is not None]
     return {"found": len(candidates), "qualified": len([r for r in results if "lead" in r]), "results": results}
 
 @app.get("/api/leads")
